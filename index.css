@@ -1,0 +1,77 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --navy:  #0D1B2A;
+    --blue:  #1B6CA8;
+    --cyan:  #00C2D4;
+  }
+
+  * { box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-navy text-white font-sans antialiased;
+    background-image:
+      radial-gradient(ellipse at 20% 20%, rgba(27, 108, 168, 0.08) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(0, 194, 212, 0.05) 0%, transparent 60%);
+  }
+}
+
+@layer components {
+  /* Scan line overlay effect */
+  .scanlines::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0, 194, 212, 0.015) 2px,
+      rgba(0, 194, 212, 0.015) 4px
+    );
+    pointer-events: none;
+  }
+
+  /* Cyber border */
+  .border-cyber {
+    border: 1px solid rgba(0, 194, 212, 0.25);
+  }
+
+  /* Glowing CTA button */
+  .btn-primary {
+    @apply bg-cyan text-navy font-semibold px-6 py-3 rounded text-sm
+           transition-all duration-200 hover:bg-cyan-400
+           focus:outline-none focus:ring-2 focus:ring-cyan focus:ring-offset-2 focus:ring-offset-navy;
+    box-shadow: 0 0 20px rgba(0, 194, 212, 0.3);
+  }
+
+  .btn-primary:hover {
+    box-shadow: 0 0 30px rgba(0, 194, 212, 0.5);
+  }
+
+  /* Secondary outlined button */
+  .btn-secondary {
+    @apply border border-cyan/40 text-cyan font-medium px-6 py-3 rounded text-sm
+           transition-all duration-200 hover:border-cyan/80 hover:bg-cyan/5;
+  }
+
+  /* Card with cyber border */
+  .card-cyber {
+    @apply rounded-lg border-cyber bg-white/[0.03] backdrop-blur-sm p-6;
+  }
+
+  /* Score badge colors */
+  .badge-safe       { @apply bg-safe/10 text-safe border border-safe/20; }
+  .badge-suspicious { @apply bg-suspicious/10 text-suspicious border border-suspicious/20; }
+  .badge-quarantine { @apply bg-quarantine/10 text-quarantine border border-quarantine/20; }
+  .badge-veto       { @apply bg-veto/10 text-veto border border-veto/20; }
+}
