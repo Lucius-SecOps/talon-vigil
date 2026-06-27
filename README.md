@@ -1,63 +1,91 @@
-# TalonVigil v2
+# TalonVigil
 
-**8-Layer Heuristic Email Security Engine**
-Enterprise-grade email intelligence. Not enterprise-grade pricing.
+Email scams are not just an enterprise problem anymore.
+They hit families, freelancers, neighborhood businesses, and growing teams every day.
 
----
+TalonVigil gives you practical, layered email threat detection without forcing you into expensive enterprise tooling.
 
-## Architecture
+## Why TalonVigil
 
-```
-Frontend (React/Vite/Tailwind) → Vercel
-Backend  (FastAPI/Python)      → DigitalOcean Droplet
-Database (PostgreSQL/Auth)     → Supabase
-Queue    (Redis/Celery)        → DigitalOcean (same droplet, v1)
-DNS      (talonvigil.com)      → Cloudflare → Vercel
-```
+- Catches suspicious messages before someone clicks the wrong link.
+- Explains why a message was flagged so people can learn, not just panic.
+- Gives small teams a security boost without needing a dedicated SOC.
+- Helps everyday users protect personal accounts from phishing and impersonation.
 
-## The 8 Layers
+## Built For
 
-| # | Layer | Severity | Multiplier | Veto |
-|---|---|---|---|---|
-| L1 | Envelope Analysis | Critical | 1.8× | ✓ |
-| L2 | Sender Reputation | High | 1.3× | — |
-| L3 | Header Forensics | High | 1.2× | — |
-| L4 | Linguistic Pressure | High | 1.4× | — |
-| L5 | Identity Impersonation | **Critical** | **2.0×** | ✓ |
-| L6 | Link & Payload | Critical | 1.9× | ✓ |
-| L7 | Behavioral Context | Medium | 1.1× | — |
-| L8 | Composite + EAA Gate | — | — | — |
+- Individuals who want safer personal inboxes.
+- Freelancers and solo operators handling invoices, contracts, and client email.
+- SMB teams that need stronger protection but still care about budget.
 
-Every quarantine decision is **Explainable, Auditable, and Actionable**.
+## How It Works
+
+TalonVigil scans each email through an 8-layer heuristic engine:
+
+| # | Layer | What It Looks For |
+|---|---|---|
+| L1 | Envelope Analysis | Routing anomalies and sender-domain mismatches |
+| L2 | Sender Reputation | Known bad infrastructure and reputation signals |
+| L3 | Header Forensics | SPF/DKIM/DMARC irregularities and forged metadata |
+| L4 | Linguistic Pressure | Urgency, coercion, and social-engineering language |
+| L5 | Identity Impersonation | Executive/vendor lookalike abuse and spoofing |
+| L6 | Link & Payload | Suspicious URLs, redirects, and risky payload patterns |
+| L7 | Behavioral Context | Unusual communication behavior and timing |
+| L8 | Composite Decision | Final risk scoring and action gate |
+
+Every decision is designed to be explainable and actionable.
+
+## Value For SMBs
+
+- Reduce phishing-related downtime and incident cleanup.
+- Protect finance and operations workflows from fake invoice/payment requests.
+- Improve team confidence with clear threat reasoning.
+- Scale from a small team to a growing org without replacing your whole stack.
+
+## Value For Everyday People
+
+- Spot fake delivery, banking, and account-reset emails faster.
+- Lower the chance of account takeovers from credential theft.
+- Keep family members safer online with clearer warning signals.
 
 ## Quick Start
 
-```bash
-# Backend
-cd backend
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp ../.env.example .env   # fill in your keys
-uvicorn main:app --reload
+### 1) Start the backend
 
-# Frontend
-cd frontend
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r ../requirements.txt
+uvicorn main:app --reload
+```
+
+### 2) Start the frontend
+
+```bash
+cd ..
 npm install
-cp ../.env.example .env.local
 npm run dev
 ```
 
-## Environment Variables
-See `.env.example` in the repo root.
+## Environment Setup
 
-## Pricing
-| Tier | Price | Scans |
-|---|---|---|
-| Scout | Free | 500/mo |
-| Shield | $7/mo | Unlimited |
-| Sentinel | $10/mo/seat | Unlimited + team |
+Create and populate your environment files before running in production.
 
-## Claude Project Skills
-All 8 Claude Project skill files are in `/skills/`.
-Load them into a Claude Project along with `TalonVigil_8Layer_Spec_Draft2.docx`
-before starting any build session.
+- Backend uses environment settings loaded by the FastAPI app.
+- Frontend uses Vite environment variables.
+
+## Tech Stack
+
+```text
+Frontend: React + Vite + Tailwind
+Backend:  FastAPI + Python
+Data/Auth: Supabase
+Queue:    Redis + Celery
+Deploy:   Vercel + DigitalOcean + Cloudflare
+```
+
+## Pricing Positioning
+
+TalonVigil is built to deliver strong practical protection at SMB-friendly cost.
+Enterprise-grade outcomes should not require enterprise-only budgets.
