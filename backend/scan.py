@@ -3,7 +3,7 @@ Scan Router — /api/scan
 Accepts an email payload, runs it through the 8-layer engine,
 returns a full EAA threat report.
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 import structlog
@@ -17,6 +17,8 @@ from engine.layer6_links import analyze_links
 from engine.layer7_behavioral import analyze_behavioral
 from engine.layer8_composite import compute_composite
 from models.scan import ScanRecord
+from auth import get_current_user
+from limiter import limiter
 from config import get_settings
 
 logger = structlog.get_logger()
@@ -38,7 +40,7 @@ class EmailScanRequest(BaseModel):
     body_text:     str
     body_html:     Optional[str] = None
     attachments:   list[str] = []       # List of attachment filenames
-    user_id:       str                  # Supabase user UUID
+    user_id:       str = ""             # Server-populated from JWT — any client value is overridden
 
 
 class LayerResult(BaseModel):
@@ -63,13 +65,21 @@ class ScanResponse(BaseModel):
 
 # ── Endpoint ───────────────────────────────────────────────────
 @router.post("/", response_model=ScanResponse)
-async def scan_email(payload: EmailScanRequest):
+@limiter.limit("20/minute")
+async def scan_email(
+    request: Request,
+    payload: EmailScanRequest,
+    user_id: str = Depends(get_current_user),
+):
     """
     Run an email through all 8 layers and return the full EAA threat report.
     This is the core pipeline. All layers are run in sequence.
     Layer 8 computes the weighted composite and applies veto logic.
+    Requires a valid Supabase Bearer token. Rate-limited to 20 scans/minute per IP.
     """
-    log = logger.bind(user_id=payload.user_id, from_address=payload.from_address)
+    # Enforce server-side identity — ignore any user_id the client sent
+    payload.user_id = user_id
+    log = logger.bind(user_id=user_id, from_address=payload.from_address)
     log.info("scan_started")
 
     try:

@@ -6,7 +6,7 @@ Checks domain age, IP reputation via IPQualityScore and Google Safe Browsing.
 """
 import httpx
 from utils.scoring import LayerScore
-from utils.indicators import normalize_indicator, IOCType
+from utils.indicators import normalize_indicator, is_valid_indicator, IOCType
 from config import get_settings
 
 settings = get_settings()
@@ -22,6 +22,11 @@ async def analyze_reputation(payload) -> LayerScore:
     if not from_domain:
         return LayerScore(layer=2, name="Sender Reputation", raw_score=10.0,
                           signals=["Could not extract sender domain."])
+
+    # SSRF guard — reject malformed/internal domains before any outbound HTTP
+    if not is_valid_indicator(from_domain, IOCType.DOMAIN):
+        return LayerScore(layer=2, name="Sender Reputation", raw_score=15.0,
+                          signals=["Sender domain failed structural validation — possible spoofing."])
 
     # ── IPQualityScore ─────────────────────────────────────────
     ipqs_result = await _check_ipqualityscore(from_domain)

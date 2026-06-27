@@ -10,13 +10,14 @@ from functools import lru_cache
 class Settings(BaseSettings):
     # ── App ───────────────────────────────────────────────────
     environment: str = "development"
-    secret_key: str = "dev-secret-change-in-production"
+    secret_key: str                                     # Required — no default. Startup fails fast if SECRET_KEY is unset.
     allowed_origins: list[str] = ["http://localhost:5173"]
 
     # ── Supabase ──────────────────────────────────────────────
     supabase_url: str
     supabase_anon_key: str
     supabase_service_role_key: str
+    supabase_jwt_secret: str            # Required — Project Settings → API → JWT Secret
 
     # ── Reputation APIs ───────────────────────────────────────
     google_safe_browsing_api_key: str = ""

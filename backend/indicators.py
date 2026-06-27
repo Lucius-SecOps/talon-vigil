@@ -4,11 +4,12 @@ Salvaged and adapted from threat_intelligence.py.
 Used by Layer 2 (Sender Reputation), Layer 5 (Impersonation), Layer 6 (Links).
 """
 import re
-import socket
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Optional
 from urllib.parse import urlparse
+
+import tldextract
 
 
 # ── Enum: IOC Types (from threat_intelligence.py::IOCType) ────
@@ -54,10 +55,14 @@ def normalize_indicator(value: str, ioc_type: IOCType) -> str:
     value = value.strip().lower()
 
     if ioc_type == IOCType.DOMAIN:
-        # Strip protocol and trailing slash
+        # Strip protocol and path — keep hostname only
         value = re.sub(r"^https?://", "", value)
         value = value.split("/")[0]
-        value = value.lstrip("www.")
+        # FIX (#4): lstrip("www.") treated "www." as a character SET,
+        # destructively eating any leading w/./chars. Use explicit prefix
+        # check instead — only strips the literal four-character prefix.
+        if value.startswith("www."):
+            value = value[4:]
 
     elif ioc_type == IOCType.URL:
         # Normalize to lowercase, strip fragments
@@ -158,32 +163,69 @@ BRAND_LOOKALIKE_LIBRARY = [
     "socialsecurity.gov", "medicare.gov",
 ]
 
+# Pre-extract brand roots once at import time — no repeated work per call.
+# tldextract resolves the true SLD (e.g. "paypal" from "paypal.co.uk"),
+# so brand comparisons are suffix-agnostic by construction.
+_BRAND_ROOTS: list[tuple[str, str]] = [
+    (tldextract.extract(brand).domain, brand)
+    for brand in BRAND_LOOKALIKE_LIBRARY
+]
+
+
+def _extract_registered_domain_root(domain: str) -> str:
+    """
+    Extract the true SLD (second-level domain) using the Mozilla Public
+    Suffix List via tldextract.
+
+    Examples:
+        paypal.attacker.com  → 'attacker'   (not 'paypal' — stops the evasion)
+        www.paypal.com       → 'paypal'
+        paypal.co.uk         → 'paypal'
+        login.microsoftonline.com → 'microsoftonline'
+        zoom.us              → 'zoom'
+
+    Returns empty string if extraction fails or the domain has no valid SLD.
+    """
+    extracted = tldextract.extract(domain)
+    return extracted.domain  # SLD only — no subdomain, no suffix
+
 
 def score_lookalike_domain(domain: str) -> tuple[float, str]:
     """
     Check if a domain is a lookalike of a high-value brand.
     Returns (score, matched_brand).
 
+    FIX (#7): Old implementation split on "." and took index 0, so
+    "paypal.attacker.com" → root "paypal" → distance 0 → scored as
+    LEGITIMATE. An attacker could trivially bypass our highest-weight
+    critical layer by using any brand name as a subdomain.
+
+    New implementation uses tldextract to isolate the true registered
+    domain (SLD) before comparison. "paypal.attacker.com" now correctly
+    extracts "attacker" and is compared against brand roots — the
+    Levenshtein distance is 5, not 0.
+
     Scoring:
-      distance == 0 → exact match (not a lookalike, score 0)
+      distance == 0 → exact match (legitimate domain, score 0)
       distance == 1 → critical lookalike (score 95)
-      distance == 2 → high lookalike (score 70)
-      distance == 3 → moderate (score 40)
-      distance > 3  → not flagged (score 0)
+      distance == 2 → high lookalike    (score 70)
+      distance == 3 → moderate          (score 40)
+      distance  > 3 → not flagged       (score 0)
     """
     domain = normalize_indicator(domain, IOCType.DOMAIN)
+    domain_root = _extract_registered_domain_root(domain)
+
+    if not domain_root:
+        return 0.0, ""
 
     best_distance = 999
     best_match = ""
 
-    for brand in BRAND_LOOKALIKE_LIBRARY:
-        brand_root = brand.split(".")[0]
-        domain_root = domain.split(".")[0]
+    for brand_root, brand_fqdn in _BRAND_ROOTS:
         dist = levenshtein_distance(domain_root, brand_root)
-
         if dist < best_distance:
             best_distance = dist
-            best_match = brand
+            best_match = brand_fqdn
 
     if best_distance == 0:
         return 0.0, ""          # Exact match = legitimate domain

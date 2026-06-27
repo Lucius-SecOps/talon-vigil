@@ -1,1 +1,39 @@
+# Environment & secrets
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node
+node_modules/
+dist/
+.next/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db

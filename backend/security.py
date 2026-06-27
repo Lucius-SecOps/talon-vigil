@@ -39,6 +39,11 @@ async def add_security_headers(request: Request, call_next) -> Response:
         "payment=(), usb=()"
     )
 
+    # Content Security Policy — API serves JSON only, no resources needed
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'; frame-ancestors 'none'"
+    )
+
     # Cache control on sensitive API endpoints
     if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/health"):
         response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"

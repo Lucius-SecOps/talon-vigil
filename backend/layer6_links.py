@@ -84,6 +84,9 @@ async def _check_safe_browsing(url: str) -> str | None:
     """
     if not settings.google_safe_browsing_api_key:
         return None
+    # SSRF guard — only submit structurally valid http/https URLs
+    if not is_valid_indicator(url, IOCType.URL):
+        return None
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.post(
