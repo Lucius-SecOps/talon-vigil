@@ -49,15 +49,15 @@ alter table public.scan_records     enable row level security;
 alter table public.sender_baselines enable row level security;
 
 -- Users can only read/write their own rows
-create policy "profiles: own row only"
+create or replace policy "profiles: own row only"
     on public.profiles for all
     using (auth.uid() = id);
 
-create policy "scan_records: own rows only"
+create or replace policy "scan_records: own rows only"
     on public.scan_records for all
     using (auth.uid() = user_id);
 
-create policy "sender_baselines: own rows only"
+create or replace policy "sender_baselines: own rows only"
     on public.sender_baselines for all
     using (auth.uid() = user_id);
 
@@ -75,6 +75,7 @@ begin
 end;
 $$ language plpgsql set search_path = '';
 
+drop trigger if exists profiles_updated_at on public.profiles;
 create trigger profiles_updated_at
     before update on public.profiles
     for each row execute function update_updated_at();
@@ -90,6 +91,7 @@ begin
 end;
 $$ language plpgsql security definer set search_path = '';
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
     after insert on auth.users
     for each row execute function handle_new_user();
