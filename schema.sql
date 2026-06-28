@@ -73,7 +73,7 @@ begin
     new.updated_at = now();
     return new;
 end;
-$$ language plpgsql;
+$$ language plpgsql set search_path = '';
 
 create trigger profiles_updated_at
     before update on public.profiles
@@ -88,7 +88,7 @@ begin
     on conflict (id) do nothing;
     return new;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 
 create trigger on_auth_user_created
     after insert on auth.users
@@ -102,7 +102,7 @@ begin
     set scans_this_month = scans_this_month + 1
     where id = p_user_id;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
 
 -- ── Reset monthly counters (schedule with pg_cron) ────────────
 -- Run on the 1st of every month at 00:00 UTC:
@@ -114,4 +114,20 @@ returns void as $$
 begin
     update public.profiles set scans_this_month = 0;
 end;
-$$ language plpgsql security definer;
+$$ language plpgsql security definer set search_path = '';
+
+-- ── Lock down SECURITY DEFINER functions ──────────────────────
+-- Revoke public EXECUTE so anon/authenticated roles cannot call these
+-- directly via REST. Service-role bypasses grants and calls them fine.
+-- update_updated_at is excluded: it is NOT security definer, so no revoke needed.
+revoke execute on function public.handle_new_user()            from anon, authenticated, public;
+revoke execute on function public.increment_scan_count(uuid)   from anon, authenticated, public;
+revoke execute on function public.reset_monthly_scan_counts()  from anon, authenticated, public;
+
+-- ── Note: rls_auto_enable event trigger ───────────────────────
+-- Supabase manages an internal rls_auto_enable event trigger that
+-- auto-enables RLS on every CREATE TABLE in the public schema.
+-- This is NOT recreated here — it is Supabase infrastructure and
+-- cannot be reliably defined by user DDL without conflicting.
+-- The explicit ALTER TABLE ... ENABLE ROW LEVEL SECURITY statements
+-- above serve as the schema.sql equivalent for fresh-project deploys.
