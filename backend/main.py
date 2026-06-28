@@ -11,7 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from config import get_settings
 from limiter import limiter
 from api.middleware.security import add_security_headers
-from api.routers import health, auth, scan
+from api.routers import health, scan
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -51,5 +51,4 @@ app.middleware("http")(add_security_headers)
 
 # ── Routers ───────────────────────────────────────────────────
 app.include_router(health.router, prefix="/api")
-app.include_router(auth.router,   prefix="/api/auth",  tags=["auth"])
 app.include_router(scan.router,   prefix="/api/scan",  tags=["scan"])

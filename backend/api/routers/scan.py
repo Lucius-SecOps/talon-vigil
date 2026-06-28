@@ -18,7 +18,6 @@ from engine.layer5_impersonation import analyze_impersonation
 from engine.layer6_links import analyze_links
 from engine.layer7_behavioral import analyze_behavioral
 from engine.layer8_composite import compute_composite
-from models.scan import ScanRecord
 from auth import get_current_user
 from limiter import limiter
 from config import get_settings
