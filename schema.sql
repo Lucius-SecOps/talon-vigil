@@ -78,3 +78,40 @@ $$ language plpgsql;
 create trigger profiles_updated_at
     before update on public.profiles
     for each row execute function update_updated_at();
+
+-- ── Auto-create profile on signup ─────────────────────────────
+create or replace function handle_new_user()
+returns trigger as $$
+begin
+    insert into public.profiles (id)
+    values (new.id)
+    on conflict (id) do nothing;
+    return new;
+end;
+$$ language plpgsql security definer;
+
+create trigger on_auth_user_created
+    after insert on auth.users
+    for each row execute function handle_new_user();
+
+-- ── Increment monthly scan counter (called after each scan) ───
+create or replace function increment_scan_count(p_user_id uuid)
+returns void as $$
+begin
+    update public.profiles
+    set scans_this_month = scans_this_month + 1
+    where id = p_user_id;
+end;
+$$ language plpgsql security definer;
+
+-- ── Reset monthly counters (schedule with pg_cron) ────────────
+-- Run on the 1st of every month at 00:00 UTC:
+-- select cron.schedule('reset-scan-counts', '0 0 1 * *', $$
+--   update public.profiles set scans_this_month = 0;
+-- $$);
+create or replace function reset_monthly_scan_counts()
+returns void as $$
+begin
+    update public.profiles set scans_this_month = 0;
+end;
+$$ language plpgsql security definer;

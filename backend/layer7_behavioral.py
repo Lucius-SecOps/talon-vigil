@@ -6,10 +6,12 @@ Veto-Eligible: No
 Requires 90-day baseline window. Scoring suppressed for new users.
 Stores only derived signals — never raw email content.
 """
+import asyncio
 from datetime import datetime
 from utils.scoring import LayerScore
 from utils.entropy import calculate_time_anomaly, calculate_frequency_anomaly
 from config import get_settings
+from supabase_client import supabase
 
 settings = get_settings()
 
@@ -84,24 +86,25 @@ async def analyze_behavioral(payload) -> LayerScore:
 async def _get_sender_baseline(user_id: str, sender_domain: str) -> dict | None:
     """
     Fetch sender behavioral baseline from Supabase.
-    Returns None if baseline hasn't matured yet (< 90 days of data).
+    Returns None if no baseline row exists yet (cold start — Layer 7 suppressed).
 
     Data stored per spec:
     - sender_domain (not email address)
     - first_contact_at
-    - avg_weekly_count (derived integer)
+    - avg_weekly_count (derived float)
     - typical_min_hour / typical_max_hour (derived integers)
     - interaction_count (rolling 90-day integer)
     NEVER stores email content, subject lines, or recipient identity.
     """
-    # TODO: implement Supabase query
-    # from supabase import create_client
-    # client = create_client(settings.supabase_url, settings.supabase_service_role_key)
-    # result = client.table("sender_baselines")
-    #     .select("*")
-    #     .eq("user_id", user_id)
-    #     .eq("sender_domain", sender_domain)
-    #     .single()
-    #     .execute()
-    # return result.data if result.data else None
-    return None  # Stub — returns None until Supabase schema is connected
+    def _fetch() -> dict | None:
+        result = (
+            supabase.table("sender_baselines")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("sender_domain", sender_domain)
+            .maybe_single()
+            .execute()
+        )
+        return result.data
+
+    return await asyncio.to_thread(_fetch)

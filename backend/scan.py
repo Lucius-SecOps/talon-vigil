@@ -3,6 +3,8 @@ Scan Router — /api/scan
 Accepts an email payload, runs it through the 8-layer engine,
 returns a full EAA threat report.
 """
+import asyncio
+import hashlib
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -20,6 +22,7 @@ from models.scan import ScanRecord
 from auth import get_current_user
 from limiter import limiter
 from config import get_settings
+from supabase_client import supabase
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -104,6 +107,12 @@ async def scan_email(
             veto=result["veto_triggered"],
         )
 
+        # Persist scan record (best-effort — never blocks the response)
+        try:
+            await _persist_scan(user_id, payload, result)
+        except Exception as persist_err:
+            log.warning("scan_persist_failed", error=str(persist_err))
+
         return ScanResponse(**result)
 
     except Exception as e:
@@ -112,3 +121,28 @@ async def scan_email(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Scan pipeline failed. Please retry.",
         )
+
+
+async def _persist_scan(user_id: str, payload: EmailScanRequest, result: dict) -> None:
+    """Insert the completed scan into scan_records and increment the user's monthly counter."""
+    from_domain = payload.from_address.split("@")[-1].lower() if "@" in payload.from_address else ""
+    subject_hash = hashlib.sha256(payload.subject.encode()).hexdigest()
+
+    record = {
+        "user_id":        user_id,
+        "from_address":   payload.from_address,
+        "from_domain":    from_domain,
+        "subject_hash":   subject_hash,
+        "composite_score": result["composite_score"],
+        "classification": result["classification"],
+        "veto_triggered": result["veto_triggered"],
+        "action_taken":   result["action"],
+        "layer_scores":   result["layers"],
+        "summary":        result["summary"],
+    }
+
+    def _write() -> None:
+        supabase.table("scan_records").insert(record).execute()
+        supabase.rpc("increment_scan_count", {"p_user_id": user_id}).execute()
+
+    await asyncio.to_thread(_write)
