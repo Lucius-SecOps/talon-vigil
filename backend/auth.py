@@ -8,7 +8,8 @@ route that requires an authenticated caller.
 """
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import JWTError, jwt
+import jwt as pyjwt
+from jwt.exceptions import InvalidTokenError
 
 from config import get_settings
 
@@ -31,7 +32,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(
+        payload = pyjwt.decode(
             credentials.credentials,
             settings.supabase_jwt_secret,
             algorithms=["HS256"],
@@ -41,5 +42,5 @@ async def get_current_user(
         if not user_id:
             raise exc
         return user_id
-    except JWTError:
+    except InvalidTokenError:
         raise exc
