@@ -50,16 +50,17 @@ async def analyze_links(payload) -> LayerScore:
                 f"— threat type: {gsb_result}."
             )
 
-        # ── Display text vs href mismatch ─────────────────────
-        href_mismatches = _find_href_mismatches(payload.body_html or "")
-        for mismatch in href_mismatches[:3]:
-            score = max(score, 70)
-            signals.append(
-                f"Link text/href mismatch: text says '{mismatch[0]}' but "
-                f"href points to '{_truncate(mismatch[1])}'."
-            )
 
-    # ── 2. Attachment Risk Scoring ─────────────────────────────
+    # ── 2. Link text/href mismatch (runs once over full HTML, not per-URL) ──
+    href_mismatches = _find_href_mismatches(payload.body_html or "")
+    for mismatch in href_mismatches[:3]:
+        score = max(score, 70)
+        signals.append(
+            f"Link text/href mismatch: text says '{mismatch[0]}' but "
+            f"href points to '{_truncate(mismatch[1])}'."
+        )
+
+    # ── 3. Attachment Risk Scoring ─────────────────────────────
     for attachment in payload.attachments:
         ext = "." + attachment.rsplit(".", 1)[-1].lower() if "." in attachment else ""
         if ext in DANGEROUS_EXTENSIONS:
@@ -119,11 +120,11 @@ def _find_href_mismatches(html: str) -> list[tuple[str, str]]:
     for match in re.finditer(pattern, html, re.IGNORECASE):
         href, text = match.group(1), match.group(2).strip()
         try:
-            href_domain = urlparse(href).netloc.lower().lstrip("www.")
+            href_domain = urlparse(href).netloc.lower().removeprefix("www.")
             # Check if display text looks like a different domain
             text_domain_match = re.search(r'([a-z0-9\-]+\.[a-z]{2,})', text.lower())
             if text_domain_match:
-                text_domain = text_domain_match.group(1).lstrip("www.")
+                text_domain = text_domain_match.group(1).removeprefix("www.")
                 if text_domain != href_domain and href_domain:
                     mismatches.append((text_domain, href))
         except Exception:
