@@ -1,14 +1,28 @@
 -- TalonVigil Supabase Schema
 -- Run this in the Supabase SQL editor to initialize the database.
+--
+-- HARDENING CONTRACT (why this file looks the way it does):
+--   * Every function pins `search_path = ''` (empty). With an empty search_path,
+--     NOTHING is implicitly resolvable — not even pg_catalog — so every
+--     identifier inside a function MUST be schema-qualified. This is the
+--     defense against search-path hijacking of SECURITY DEFINER functions.
+--   * Built-ins are written as pg_catalog.<fn>() (e.g. pg_catalog.now()).
+--   * All table references are schema-qualified (public.<table>).
+--   * SECURITY DEFINER functions have public EXECUTE revoked so anon /
+--     authenticated cannot invoke them via REST. The service-role backend
+--     bypasses grants and calls them normally.
+--   * RLS policies use BOTH `using` and `with check` so reads AND writes are
+--     constrained to the row owner.
+-- This file is idempotent: safe to re-run on an existing or fresh project.
 
 -- ── Users (extends Supabase auth.users) ───────────────────────
 create table if not exists public.profiles (
-    id              uuid references auth.users(id) on delete cascade primary key,
-    tier            text not null default 'scout'   check (tier in ('scout', 'shield', 'sentinel')),
+    id               uuid references auth.users(id) on delete cascade primary key,
+    tier             text not null default 'scout'  check (tier in ('scout', 'shield', 'sentinel')),
     scans_this_month integer not null default 0,
-    scan_limit      integer not null default 500,   -- Scout=500, Shield/Sentinel=unlimited (-1)
-    created_at      timestamptz not null default now(),
-    updated_at      timestamptz not null default now()
+    scan_limit       integer not null default 500,   -- Scout=500, Shield/Sentinel=unlimited (-1)
+    created_at       timestamptz not null default now(),
+    updated_at       timestamptz not null default now()
 );
 
 -- ── Scan Records (EAA audit log) ──────────────────────────────
@@ -48,21 +62,27 @@ alter table public.profiles         enable row level security;
 alter table public.scan_records     enable row level security;
 alter table public.sender_baselines enable row level security;
 
--- Users can only read/write their own rows
+-- Users can only read/write their own rows.
+-- `using`      → governs which rows are visible / updatable / deletable.
+-- `with check` → governs which rows may be inserted / updated INTO existence.
+-- Both clauses are required so INSERTs are constrained, not just reads.
 drop policy if exists "profiles: own row only" on public.profiles;
 create policy "profiles: own row only"
     on public.profiles for all
-    using (auth.uid() = id);
+    using (auth.uid() = id)
+    with check (auth.uid() = id);
 
 drop policy if exists "scan_records: own rows only" on public.scan_records;
 create policy "scan_records: own rows only"
     on public.scan_records for all
-    using (auth.uid() = user_id);
+    using (auth.uid() = user_id)
+    with check (auth.uid() = user_id);
 
 drop policy if exists "sender_baselines: own rows only" on public.sender_baselines;
 create policy "sender_baselines: own rows only"
     on public.sender_baselines for all
-    using (auth.uid() = user_id);
+    using (auth.uid() = user_id)
+    with check (auth.uid() = user_id);
 
 -- ── Indexes ───────────────────────────────────────────────────
 create index if not exists idx_scan_records_user_id   on public.scan_records(user_id);
@@ -70,69 +90,89 @@ create index if not exists idx_scan_records_scanned   on public.scan_records(sca
 create index if not exists idx_baselines_user_domain  on public.sender_baselines(user_id, sender_domain);
 
 -- ── Auto-update updated_at ────────────────────────────────────
-create or replace function update_updated_at()
-returns trigger as $$
+-- search_path='' → now() is NOT implicitly resolvable; must qualify as
+-- pg_catalog.now() or the trigger throws "function now() does not exist".
+create or replace function public.update_updated_at()
+returns trigger
+language plpgsql
+set search_path = ''
+as $$
 begin
-    new.updated_at = now();
+    new.updated_at = pg_catalog.now();
     return new;
 end;
-$$ language plpgsql set search_path = '';
+$$;
 
 drop trigger if exists profiles_updated_at on public.profiles;
 create trigger profiles_updated_at
     before update on public.profiles
-    for each row execute function update_updated_at();
+    for each row execute function public.update_updated_at();
 
 -- ── Auto-create profile on signup ─────────────────────────────
-create or replace function handle_new_user()
-returns trigger as $$
+-- SECURITY DEFINER: runs as owner to insert into public.profiles when a new
+-- auth.users row appears. All identifiers qualified for empty search_path.
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
     insert into public.profiles (id)
     values (new.id)
     on conflict (id) do nothing;
     return new;
 end;
-$$ language plpgsql security definer set search_path = '';
+$$;
 
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
     after insert on auth.users
-    for each row execute function handle_new_user();
+    for each row execute function public.handle_new_user();
 
 -- ── Increment monthly scan counter (called after each scan) ───
-create or replace function increment_scan_count(p_user_id uuid)
-returns void as $$
+-- SECURITY DEFINER: backend (service-role) calls this via RPC after a scan.
+create or replace function public.increment_scan_count(p_user_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
     update public.profiles
     set scans_this_month = scans_this_month + 1
     where id = p_user_id;
 end;
-$$ language plpgsql security definer set search_path = '';
+$$;
 
 -- ── Reset monthly counters (schedule with pg_cron) ────────────
--- Run on the 1st of every month at 00:00 UTC:
--- select cron.schedule('reset-scan-counts', '0 0 1 * *', $$
---   update public.profiles set scans_this_month = 0;
--- $$);
-create or replace function reset_monthly_scan_counts()
-returns void as $$
+-- After enabling the pg_cron extension, schedule with:
+--   select cron.schedule('reset-scan-counts', '0 0 1 * *',
+--     $job$ select public.reset_monthly_scan_counts(); $job$);
+create or replace function public.reset_monthly_scan_counts()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
 begin
     update public.profiles set scans_this_month = 0;
 end;
-$$ language plpgsql security definer set search_path = '';
+$$;
 
 -- ── Lock down SECURITY DEFINER functions ──────────────────────
--- Revoke public EXECUTE so anon/authenticated roles cannot call these
--- directly via REST. Service-role bypasses grants and calls them fine.
--- update_updated_at is excluded: it is NOT security definer, so no revoke needed.
-revoke execute on function public.handle_new_user()            from anon, authenticated, public;
-revoke execute on function public.increment_scan_count(uuid)   from anon, authenticated, public;
-revoke execute on function public.reset_monthly_scan_counts()  from anon, authenticated, public;
+-- Revoke public EXECUTE so anon/authenticated cannot call these directly via
+-- REST (/rest/v1/rpc/...). Service-role bypasses grants and calls them fine.
+-- update_updated_at is excluded: it is NOT security definer (trigger-only),
+-- and trigger functions are not exposed as RPC endpoints regardless.
+revoke execute on function public.handle_new_user()           from anon, authenticated, public;
+revoke execute on function public.increment_scan_count(uuid)  from anon, authenticated, public;
+revoke execute on function public.reset_monthly_scan_counts() from anon, authenticated, public;
 
 -- ── Note: rls_auto_enable event trigger ───────────────────────
--- Supabase manages an internal rls_auto_enable event trigger that
--- auto-enables RLS on every CREATE TABLE in the public schema.
--- This is NOT recreated here — it is Supabase infrastructure and
--- cannot be reliably defined by user DDL without conflicting.
--- The explicit ALTER TABLE ... ENABLE ROW LEVEL SECURITY statements
--- above serve as the schema.sql equivalent for fresh-project deploys.
+-- The Supabase project also carries an rls_auto_enable event trigger that
+-- auto-enables RLS on every CREATE TABLE in the public schema. It is a
+-- DB-level safety net managed outside this file and is deliberately NOT
+-- recreated here. The explicit `alter table ... enable row level security`
+-- statements above are the schema.sql equivalent and stand on their own for
+-- fresh-project deploys, so RLS is guaranteed even if that trigger is absent.
