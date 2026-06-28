@@ -49,15 +49,18 @@ alter table public.scan_records     enable row level security;
 alter table public.sender_baselines enable row level security;
 
 -- Users can only read/write their own rows
-create or replace policy "profiles: own row only"
+drop policy if exists "profiles: own row only" on public.profiles;
+create policy "profiles: own row only"
     on public.profiles for all
     using (auth.uid() = id);
 
-create or replace policy "scan_records: own rows only"
+drop policy if exists "scan_records: own rows only" on public.scan_records;
+create policy "scan_records: own rows only"
     on public.scan_records for all
     using (auth.uid() = user_id);
 
-create or replace policy "sender_baselines: own rows only"
+drop policy if exists "sender_baselines: own rows only" on public.sender_baselines;
+create policy "sender_baselines: own rows only"
     on public.sender_baselines for all
     using (auth.uid() = user_id);
 
