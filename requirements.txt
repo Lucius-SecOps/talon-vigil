@@ -31,5 +31,5 @@ structlog==25.5.0
 
 # ── Security ──────────────────────────────────────────────────
 slowapi==0.1.9
-cryptography==48.0.1
+cryptography==48.0.5
 tldextract==5.1.2
