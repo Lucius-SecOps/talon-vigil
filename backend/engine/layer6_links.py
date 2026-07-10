@@ -6,6 +6,7 @@ Active URL detonation is a v2 feature.
 """
 import re
 import httpx
+from html.parser import HTMLParser
 from urllib.parse import urlparse
 from utils.scoring import LayerScore
 from utils.entropy import score_url_entropy
@@ -113,12 +114,42 @@ async def _check_safe_browsing(url: str) -> str | None:
     return None
 
 
+class _AnchorExtractor(HTMLParser):
+    """Collects (href, display_text) pairs for every <a> tag."""
+
+    def __init__(self):
+        super().__init__()
+        self.anchors: list[tuple[str, str]] = []
+        self._href: str | None = None
+        self._text_parts: list[str] = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self._href = dict(attrs).get("href")
+            self._text_parts = []
+
+    def handle_data(self, data):
+        if self._href is not None:
+            self._text_parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self._href is not None:
+            self.anchors.append((self._href, "".join(self._text_parts).strip()))
+            self._href = None
+            self._text_parts = []
+
+
 def _find_href_mismatches(html: str) -> list[tuple[str, str]]:
     """Find anchor tags where display text domain differs from href domain."""
     mismatches = []
-    pattern = r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>([^<]+)</a>'
-    for match in re.finditer(pattern, html, re.IGNORECASE):
-        href, text = match.group(1), match.group(2).strip()
+    extractor = _AnchorExtractor()
+    try:
+        extractor.feed(html)
+    except Exception:
+        return mismatches
+    for href, text in extractor.anchors:
+        if not href or not text:
+            continue
         try:
             href_domain = urlparse(href).netloc.lower().removeprefix("www.")
             # Check if display text looks like a different domain
