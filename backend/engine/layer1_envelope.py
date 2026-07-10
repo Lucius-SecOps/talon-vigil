@@ -46,7 +46,7 @@ async def analyze_envelope(payload) -> LayerScore:
 
     # ── Return-Path Mismatch ───────────────────────────────────
     from_domain = payload.from_address.split("@")[-1].lower() if "@" in payload.from_address else ""
-    return_path_match = re.search(r"return-path:.*?@([a-z0-9.\-]+)", headers)
+    return_path_match = re.search(r"return-path:.{0,200}?@([a-z0-9.\-]+)", headers)
     if return_path_match:
         return_domain = return_path_match.group(1)
         if return_domain and from_domain and return_domain != from_domain:
