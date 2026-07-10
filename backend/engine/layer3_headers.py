@@ -24,7 +24,7 @@ async def analyze_headers(payload) -> LayerScore:
             )
 
     # Message-ID anomaly — templated/missing
-    msg_id_match = re.search(r"message-id:\s*(<[^>]+>)", headers, re.IGNORECASE)
+    msg_id_match = re.search(r"message-id:\s*(<[^>\r\n]{1,998}>)", headers, re.IGNORECASE)
     if not msg_id_match:
         score += 20
         signals.append("Message-ID header is missing — unusual for legitimate email clients.")
