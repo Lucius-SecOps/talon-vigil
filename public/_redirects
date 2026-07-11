@@ -1,0 +1,8 @@
+# API proxy — mirrors vercel.json's rewrite to the backend.
+# Status 200 makes this a proxy (same-origin from the browser's
+# perspective) rather than a redirect, so CSP connect-src 'self' still
+# covers it and the JWT Authorization header isn't leaked cross-origin.
+/api/*  https://api.talonvigil.com/api/:splat  200
+
+# SPA fallback — client-side routing (react-router-dom)
+/*      /index.html                            200
