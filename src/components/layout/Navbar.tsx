@@ -15,10 +15,10 @@ export default function Navbar() {
           <a href="#" className="hover:text-[#00C2D4] transition-colors">Docs</a>
         </div>
         <div className="flex items-center gap-3">
-          <a href="#" className="text-sm text-gray-300 hover:text-white transition-colors">Log in</a>
-          <a href="#" className="bg-[#00C2D4] text-[#0D1B2A] font-semibold text-sm px-4 py-2 rounded hover:bg-[#33d4e3] transition-colors">
+          <Link to="/scan" className="text-sm text-gray-300 hover:text-white transition-colors">Log in</Link>
+          <Link to="/scan" className="bg-[#00C2D4] text-[#0D1B2A] font-semibold text-sm px-4 py-2 rounded hover:bg-[#33d4e3] transition-colors">
             Start Free
-          </a>
+          </Link>
         </div>
       </div>
     </nav>
