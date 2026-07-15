@@ -43,7 +43,7 @@ SCARCITY_PATTERNS = [
 ]
 
 RECIPROCITY_PATTERNS = [
-    (r"(you (have|'ve) won|congratulations.*prize|winner)", 25, "Reciprocity: Prize/winner claim"),
+    (r"(you (have|'ve) won|congratulations.{0,100}prize|winner)", 25, "Reciprocity: Prize/winner claim"),
     (r"(gift card|amazon card|itunes card|google play card)", 30, "Reciprocity: Gift card lure"),
     (r"(unclaimed|pending) (funds?|refund|inheritance|transfer)", 25, "Reciprocity: Unclaimed funds hook"),
     (r"(tax refund|overpayment|reimbursement) (of|for) \$", 20, "Reciprocity: Financial refund lure"),

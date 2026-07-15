@@ -153,7 +153,7 @@ def _find_href_mismatches(html: str) -> list[tuple[str, str]]:
         try:
             href_domain = urlparse(href).netloc.lower().removeprefix("www.")
             # Check if display text looks like a different domain
-            text_domain_match = re.search(r'([a-z0-9\-]+\.[a-z]{2,})', text.lower())
+            text_domain_match = re.search(r'([a-z0-9\-]{1,63}\.[a-z]{2,24})', text.lower())
             if text_domain_match:
                 text_domain = text_domain_match.group(1).removeprefix("www.")
                 if text_domain != href_domain and href_domain:
